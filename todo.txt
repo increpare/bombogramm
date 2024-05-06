@@ -1,0 +1,11 @@
+DOTO
+DONE draw background
+DEON draw permanent interface buttons
+turn on
+    -> generate level 
+    -> show masks
+    -> generate buttons
+    -> generate endscreen
+    -> sfx
+
+    -> check solutions unique
