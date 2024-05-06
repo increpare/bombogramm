@@ -14,22 +14,53 @@ var solutionstate = {
 }
 
 var playstate = {
+    width:8,
+    height:8,
     smallbombs: [],//list of coordinates
     bigbombs: [],
     rowmask: [],
     colmask: [],
-    rowmask_bad: [],
-    colmask_bad: [],
+    rowmask_state: [],//-1,0,1 bad neutral good
+    colmask_state: [],//-1,0,1 bad neutral good
+    won:false,
 }
 
 function validateMasks(solution,currentstate){
     calculateMasks(currentstate);
     //for each row, check you haven't exceeded the number of bombs
     for (var i=0;i<solution.rowmask.length;i++){
-        playstate.rowmask_bad[i] = currentstate.rowmask[i]>solution.rowmask[i];
+        playstate.rowmask_state[i] = Math.sign(solution.rowmask[i]-currentstate.rowmask[i]);
     }
     for (var i=0;i<solution.colmask.length;i++){
-        playstate.colmask_bad[i] = currentstate.colmask[i]>solution.colmask[i];
+        playstate.colmask_state[i] = Math.sign(solution.colmask[i]-currentstate.colmask[i]);
+    }
+    //check if all are good
+    var waswon = playstate.won;
+    playstate.won = true;
+    for (var i=0;i<solution.rowmask.length;i++){
+        if (playstate.rowmask_state[i] !== 0){
+            playstate.won = false;
+            break;
+        }
+    }
+    for (var i=0;i<solution.colmask.length;i++){
+        if (playstate.colmask_state[i] !== 0){
+            playstate.won = false;
+            break;
+        }
+    }
+    //check no cells empty
+    for (var i=0;i<solution.width;i++){
+        for (var j=0;j<solution.height;j++){
+            if (getCell(currentstate,i,j)===0){
+                playstate.won = false;
+                break;
+            }
+        }
+    }
+
+    if (!waswon && playstate.won){
+        playSound(32947700);
     }
 }
 
@@ -69,7 +100,7 @@ function generateSolution(w, h) {
 
     //for a grid with N cells, try place n/2 big bombs
     const CELL_COUNT = result.width * result.height;
-    const BOMB_PLACEMENT_ATTEMPTS = Math.floor(CELL_COUNT * 0.75);
+    const BOMB_PLACEMENT_ATTEMPTS = Math.floor(CELL_COUNT / 1.0);
     for (var i = 0; i < BOMB_PLACEMENT_ATTEMPTS; i++) {
         var x = Math.floor(Math.random() * (result.width - 1));
         var y = Math.floor(Math.random() * (result.height - 1));
@@ -108,9 +139,10 @@ function calculateMasks(result) {
         //basically, count little bombs as worth 2, and then half at the end
         var bombcount_double = 0;
         for (var j = 0; j < result.height; j++) {
-            if (getCell(result, i, j) === 1) {
+            var cellcontents = getCell(result, i, j);
+            if (cellcontents === 1) {
                 bombcount_double += 2;
-            } else {
+            } else if (cellcontents>1) {
                 bombcount_double += 1;
             }
         }
@@ -122,9 +154,10 @@ function calculateMasks(result) {
         //basically, count little bombs as worth 2, and then half at the end
         var bombcount_double = 0;
         for (var i = 0; i < result.width; i++) {
-            if (getCell(result, i, j) === 1) {
+            var cellcontents = getCell(result, i, j);
+            if (cellcontents === 1) {
                 bombcount_double += 2;
-            } else {
+            } else if (cellcontents>1){
                 bombcount_double += 1;
             }
         }
@@ -196,11 +229,16 @@ var image_names = [
     "digit8",
     "digitbg_white",
     "digitbg_red",
+    "digitbg_green",
     "stufe_button",
     "stufe_button_pressed",
     "led_off",
     "led_on",
-    "gewinnnachricht",
+    "gewinnnachricht1",
+    "gewinnnachricht2",
+    "gewinnnachricht3",
+    "gewinnnachricht4",
+    "gewinnnachricht5",
     "schalter_an",
     "schalter_aus",
     "sfx_on",
@@ -286,13 +324,13 @@ for (var i = 0; i < image_names.length; i++) {
 
 }
 
-var stufe = 4;
+var stufe = 0;
 
 var interface_an = false;
-var muted = false;
 
 function button_sfx_on() {
     muted=true;
+	playSound(4159307);
     clickable_buttons[0][7] = false;
     clickable_buttons[1][7] = true;
     redraw();
@@ -305,14 +343,56 @@ function button_sfx_off() {
 }
 
 function button_stufe() {
-    stufe = (stufe + 1) % 5;    
-    regenLevel();
-    redraw();
+    if (interface_an){
+        playSound(4159307);
+        stufe = (stufe + 1) % 5;    
+        regenLevel();
+        redraw();
+    }
 }
+
+function bombbutton_click_callback(x, y, big){
+    return function(){
+        playSound(4457707);
+        //remove bomb from playstate
+        if (big){
+            for (var i = 0; i < playstate.bigbombs.length; i++) {
+                if (playstate.bigbombs[i][0] === x && playstate.bigbombs[i][1] === y) {
+                    playstate.bigbombs.splice(i, 1);
+                    break;
+                }
+            }
+        } else {
+            for (var i = 0; i < playstate.smallbombs.length; i++) {
+                if (playstate.smallbombs[i][0] === x && playstate.smallbombs[i][1] === y) {
+                    playstate.smallbombs.splice(i, 1);
+                    break;
+                }
+            }
+        }
+        
+        calculateMasks(playstate);
+        validateMasks(solutionstate,playstate);
+        generateLevelButtons();
+        redraw();
+    }
+}
+
 
 function gridbutton_click_callback(x, y, big){
     return function(){
+        playSound(4457707);
         console.log("clicked",x,y,big);
+        if (big){
+            playstate.bigbombs.push([x,y]);
+        } else {
+            playstate.smallbombs.push([x,y]);
+        }
+
+        calculateMasks(playstate);
+        validateMasks(solutionstate,playstate);
+        generateLevelButtons();
+        redraw();
     }
 }
 
@@ -321,50 +401,96 @@ function generateLevelButtons(){
     //remove all entries from clickable_buttons to reduce its legnth to CLICKABLE_BUTTONS_CORECOUNT
     clickable_buttons.splice(CLICKABLE_BUTTONS_CORECOUNT);
 
+    if (interface_an===false){
+        return;
+    }
+
     //step two, add new buttons
     for (var i = 0; i < solutionstate.width; i++) {
         for (var j = 0; j < solutionstate.height; j++) {
-            // [ ID, x, y, img, img_pressed, current_state, callback, visible]
-            var button_id = "cell_" + i + "_" + j;
-            var button_x = 15 + i * 14;
-            var button_y = 38 + j * 14;
-            var button_img_name = "grid_button_diamond";
-            if (i===0 && j===0){
-                //top left
-                button_img_name = "button_tl";
-            } else if (i===solutionstate.width-1 && j===0){
-                //top right
-                button_img_name = "button_tr";
-            } else if (i===0 && j===solutionstate.height-1){
-                //bottom left
-                button_img_name = "button_bl";
-            }
-            else if (i===solutionstate.width-1 && j===solutionstate.height-1){
-                //bottom right
-                button_img_name = "button_br";
-            } else if (i===0){
-                //left
-                button_img_name = "button_l";
-            }
-            else if (i===solutionstate.width-1){
-                //right
-                button_img_name = "button_r";
-            }
-            else if (j===0){
-                //top
-                button_img_name = "button_t";
-            }
-            else if (j===solutionstate.height-1){
-                //bottom
-                button_img_name = "button_b";
-            }
+            cellcontents = getCell(playstate, i, j);
+            if (cellcontents === 0) {
+                // [ ID, x, y, img, img_pressed, current_state, callback, visible]
+                var button_id = "cell_" + i + "_" + j;
+                var button_x = 15 + i * 14;
+                var button_y = 38 + j * 14;
+                var button_img_name = "grid_button_diamond";
+                if (i===0 && j===0){
+                    //top left
+                    button_img_name = "button_tl";
+                } else if (i===solutionstate.width-1 && j===0){
+                    //top right
+                    button_img_name = "button_tr";
+                } else if (i===0 && j===solutionstate.height-1){
+                    //bottom left
+                    button_img_name = "button_bl";
+                }
+                else if (i===solutionstate.width-1 && j===solutionstate.height-1){
+                    //bottom right
+                    button_img_name = "button_br";
+                } else if (i===0){
+                    //left
+                    button_img_name = "button_l";
+                }
+                else if (i===solutionstate.width-1){
+                    //right
+                    button_img_name = "button_r";
+                }
+                else if (j===0){
+                    //top
+                    button_img_name = "button_t";
+                }
+                else if (j===solutionstate.height-1){
+                    //bottom
+                    button_img_name = "button_b";
+                }
 
-            var button_img_pressed_name =button_img_name+"_pressed";
-            
-            var button_current_state = false;
-            var button_callback = gridbutton_click_callback(i, j, false);
-            var button_visible = interface_an;
-            clickable_buttons.push([button_id, button_x, button_y, button_img_name, button_img_pressed_name, button_current_state, button_callback, button_visible]);            
+                var button_img_pressed_name =button_img_name+"_pressed";
+
+                var button_current_state = false;
+                var button_callback = gridbutton_click_callback(i, j, false);
+                var button_visible = interface_an;
+                clickable_buttons.push([button_id, button_x, button_y, button_img_name, button_img_pressed_name, button_current_state, button_callback, button_visible]);            
+
+                if( getCell(playstate, i+1, j) === 0 && 
+                getCell(playstate, i, j+1) === 0 && 
+                getCell(playstate, i+1, j+1)=== 0 ) {
+                    //now to generate the big bomb buttons, squidged between the small bomb buttons
+                    if (i<solutionstate.width-1 && j<solutionstate.height-1){
+                        var button_id = "cell_big_" + i + "_" + j;
+                        var button_x = 15 + i * 14 + 7;
+                        var button_y = 38 + j * 14 + 7;
+                        var button_img_name = "grid_button_plus";
+                        var button_img_pressed_name = button_img_name+"_pressed";
+                        var button_current_state = false;
+                        var button_callback = gridbutton_click_callback(i, j, true);
+                        var button_visible = interface_an;
+                        clickable_buttons.push([button_id, button_x, button_y, button_img_name, button_img_pressed_name, button_current_state, button_callback, button_visible]);            
+                    }
+                }
+            } else if (cellcontents===1){
+                //draw small bomb button
+                var button_id = "cell_" + i + "_" + j;
+                var button_x = 15 + i * 14;
+                var button_y = 38 + j * 14;
+                var button_img_name = "mine_small";
+                var button_img_pressed_name = "mine_small_pressed";
+                var button_current_state = false;
+                var button_callback = bombbutton_click_callback(i, j, false);
+                var button_visible = interface_an;
+                clickable_buttons.push([button_id, button_x, button_y, button_img_name, button_img_pressed_name, button_current_state, button_callback, button_visible]);
+            } else if (cellcontents ===2){
+                //draw big bomb button
+                var button_id = "cell_big_" + i + "_" + j;
+                var button_x = 15 + i * 14;
+                var button_y = 38 + j * 14;
+                var button_img_name = "mine_big";
+                var button_img_pressed_name = "mine_big_pressed";
+                var button_current_state = false;
+                var button_callback = bombbutton_click_callback(i, j, true);
+                var button_visible = interface_an;
+                clickable_buttons.push([button_id, button_x, button_y, button_img_name, button_img_pressed_name, button_current_state, button_callback, button_visible]);                
+            }
         }
     }
     
@@ -376,12 +502,15 @@ function regenLevel(){
     
     solutionstate = generateSolution(dimension, dimension);
     playstate = {
+        width:dimension,
+        height:dimension,
         smallbombs: [],//list of coordinates
         bigbombs: [],
         rowmask: [],
         colmask: [],
-        rowmask_bad: [],
-        colmask_bad: [],
+        rowmask_state: [],
+        colmask_state: [],
+        won:false,
     };
     
     validateMasks(solutionstate,playstate);
@@ -394,11 +523,14 @@ function regenLevel(){
 function button_interface_an(){
     //turn off
     interface_an=false;
+    generateLevelButtons();
     redraw();
 }
 
 function button_interface_aus(){
     //turn on
+
+	playSound(4159307);
     interface_an=true;
     regenLevel();
     redraw();
@@ -456,21 +588,37 @@ function redraw() {
     //draw masks
     if (interface_an){
         for (var i = 0; i < solutionstate.width; i++) {
-            if (playstate.colmask_bad[i]){
-                ctx.drawImage(images["digitbg_red"], 18 + i * 14, 27);
-            } else {
-                ctx.drawImage(images["digitbg_white"], 18 + i * 14, 27);
+            switch (playstate.colmask_state[i]){
+                case -1:
+                    ctx.drawImage(images["digitbg_red"], 18 + i * 14, 27);
+                    break;
+                case 0:
+                    ctx.drawImage(images["digitbg_green"], 18 + i * 14, 27);
+                    break;
+                case 1:
+                    ctx.drawImage(images["digitbg_white"], 18 + i * 14, 27);
+                    break;
             }
             ctx.drawImage(images["digit" + solutionstate.colmask[i]], 18 + i * 14, 27);
         }
         for (var i = 0; i < solutionstate.height; i++) {
-            if (playstate.rowmask_bad[i]){
-                ctx.drawImage(images["digitbg_red"], 4, 41 + i * 14);
-            } else {
-                ctx.drawImage(images["digitbg_white"], 4, 41 + i * 14);
+            switch (playstate.rowmask_state[i]){
+                case -1:
+                    ctx.drawImage(images["digitbg_red"], 4, 41 + i * 14);
+                    break;
+                case 0:
+                    ctx.drawImage(images["digitbg_green"], 4, 41 + i * 14);
+                    break;
+                case 1:
+                    ctx.drawImage(images["digitbg_white"], 4, 41 + i * 14);
+                    break;
             }
             ctx.drawImage(images["digit" + solutionstate.rowmask[i]], 4, 41 + i * 14);
         }    
+    }
+
+    if (interface_an && playstate.won){
+        ctx.drawImage(images["gewinnnachricht"+(stufe+1)], 130, 128);
     }
 }
 
@@ -517,6 +665,12 @@ function hitTest(image_name, xoff, yoff, x, y) {
 
 function handleTap(e) {
 
+    //if right-click, cancel - don't show context-menu
+    if (e.button === 2) {
+        e.preventDefault();
+        return;
+    }
+
     var [mouseX, mouseY] = getMousePos(e);
 
     var power_button_mask_name = interface_an ? "schalter_an" : "schalter_aus";
@@ -542,6 +696,12 @@ function handleTap(e) {
 }
 
 function handleUntap(e) {
+    
+    if (e.button === 2) {
+        e.preventDefault();
+        return;
+    }
+
     var [mouseX, mouseY] = getMousePos(e);
 
     for (var i = 0; i < clickable_buttons.length; i++) {
