@@ -279,7 +279,9 @@ var loadedImages = 0;
 
 var temp_canvas = document.createElement("canvas");
 temp_canvas.style.display = 'none';
-var temp_ctx = temp_canvas.getContext("2d");
+//will read frequently
+var temp_ctx = temp_canvas.getContext("2d", { willReadFrequently: true });
+
 
 for (var i = 0; i < image_names.length; i++) {
     var image = new Image();
