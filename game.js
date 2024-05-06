@@ -218,6 +218,7 @@ var images = [];
 
 var image_names = [
     "background",
+    "screen_on_bg",
     "digit0",
     "digit1",
     "digit2",
@@ -271,7 +272,6 @@ var image_names = [
     "mine_big_pressed",
     "mine_small",
     "mine_small_pressed",
-    "screen_on_bg"
 ];
 
 
@@ -288,11 +288,11 @@ for (var i = 0; i < image_names.length; i++) {
     image.onload = function (INDEX, IMAGE) {
         return function (e) {
             //if all loaded
-            if (++loadedImages >= image_names.length) {
-                // draw the image into the canvas
-                redraw();
-            }
-
+            // if (++loadedImages >= image_names.length) {
+            //     // draw the image into the canvas
+                
+            // }
+            redraw();
 
             //now calculate alpha mask of image
             var mask = [];
